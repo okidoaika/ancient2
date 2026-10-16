@@ -1810,7 +1810,12 @@ function openOnline(){
   showScreen('#online');fillRoomForm();
   if(!$('#cs').value){let v='';try{v=localStorage.getItem('ancient.callsign')||'';}catch(_){}$('#cs').value=v||('PILOT-'+String(Math.floor(Math.random()*900)+100));}
   const ok=!!NET.lobby;$('#rmCreate').disabled=!ok;
-  if(NET.unavailable)onMsg('この画面ではオンライン対戦を使えません。サインインした状態で、共有されたこのゲームを開いてください。',true);
+  if(NET.unavailable)onMsg({
+    outside:'このページはClaudeの外で開かれているため、オンライン対戦を使えません。claude.ai でこのゲームのリンクを開いてください。',
+    noroom:'この開き方ではオンライン対戦につながりません。claude.ai にサインインした状態で、会話の中や共有されたリンクからゲームを開いてください。ゲームだけを新しいタブで直接開いた画面や、公開リンクで開いた画面からは参加できません。',
+    not_granted:'このアカウントではオンライン対戦に参加できません。ゲームの持ち主に、あなたのメールアドレスで共有してもらってください。',
+    revoked:'共有の設定が変わったため接続が切れました。ページを開き直してください。'
+  }[NET.why]||`オンライン対戦に接続できませんでした（${String(NET.why||'不明').slice(0,40)}）。ページを開き直してください。`,true);
   else if(!ok)onMsg('接続しています…');else onMsg('');
   renderRoomList();
 }
@@ -1944,11 +1949,12 @@ $('#roomStart').addEventListener('click',hostStart);
 $('#roomLeave').addEventListener('click',()=>leaveRoom(''));
 $('#cs').addEventListener('change',()=>{$('#cs').value=callsign();saveCallsign();if(NET.nr)NET.nr.presence({name:callsign()}).catch(()=>{});advertise();});
 (async()=>{
-  const room=(window.claude&&window.claude.use)?await window.claude.use('room').catch(()=>null):null;
-  if(!room){NET.unavailable=true;if(!$('#online').hidden)openOnline();return;}
+  const inClaude=!!(window.claude&&window.claude.use);
+  const room=inClaude?await window.claude.use('room').catch(()=>null):null;
+  if(!room){NET.unavailable=true;NET.why=inClaude?'noroom':'outside';if(!$('#online').hidden)openOnline();return;}
   NET.lobby=room;
   room.onPeers(ch=>{for(const p of ch.peers)if(p.sameTab)NET.myPeer=p.peer;if(!$('#online').hidden){$('#rmCreate').disabled=!!NET.nr;if($('#onMsg').textContent==='接続しています…')onMsg('');renderRoomList();}},
-    ()=>{NET.lobby=null;NET.unavailable=true;if(!$('#online').hidden)openOnline();});
+    e=>{NET.lobby=null;NET.unavailable=true;NET.why=(e&&e.code)||'error';if(!$('#online').hidden)openOnline();});
 })();
 if(location.hostname==='localhost'||location.hostname==='127.0.0.1')window.__dbg={NET,mechs,get player(){return player;},buried:()=>buried,props:()=>props,loots:()=>loots,zone};
 

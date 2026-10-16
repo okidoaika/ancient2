@@ -1,9 +1,15 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="ja">
+<head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ANCIENT</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Oxanium:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>body{margin:0}</style>
+</head>
+<body>
 <style>
 :root{
   color-scheme: dark;
@@ -205,6 +211,11 @@ h1 .glow{color:var(--relic);text-shadow:0 0 24px rgba(95,227,208,.45);}
 .members li em{font-style:normal;font-family:var(--f-dot);font-size:11px;color:var(--relic);white-space:nowrap;}
 .members li.wait{color:var(--sand-dim);}
 .roomcd{font-family:var(--f-disp);font-weight:800;font-size:26px;color:var(--relic);min-height:1.3em;letter-spacing:.06em;}
+
+.code-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;}
+.invite{border:1px solid rgba(95,227,208,.45);background:rgba(95,227,208,.06);padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;}
+.invite .code{font-family:var(--f-disp);font-weight:800;font-size:28px;letter-spacing:.18em;color:var(--relic);}
+.invite .link{font-family:var(--f-dot);font-size:12px;color:var(--sand-dim);overflow-wrap:anywhere;min-width:0;flex:1 1 220px;user-select:text;-webkit-user-select:text;}
 </style>
 
 <canvas id="game"></canvas>
@@ -302,7 +313,14 @@ h1 .glow{color:var(--relic);text-shadow:0 0 24px rgba(95,227,208,.45);}
       </div>
       <button class="btn2" id="rmCreate">部屋を立てる</button>
     </div>
-    <div class="panel">
+    <div class="panel" id="codePanel" hidden>
+      <h3>部屋コードで参加</h3>
+      <div class="code-row">
+        <label class="field" for="joinCode">ホストから聞いた6文字のコード<input id="joinCode" maxlength="12" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="例：k7pq2m"></label>
+        <button class="btn2" id="joinBtn">参加する</button>
+      </div>
+    </div>
+    <div class="panel" id="listPanel">
       <h3>参加できる部屋</h3>
       <ul class="rooms" id="roomList"></ul>
       <p class="note" id="roomEmpty">いま開いている部屋はありません。部屋を立てて、ほかの人を待つこともできます。</p>
@@ -315,6 +333,7 @@ h1 .glow{color:var(--relic);text-shadow:0 0 24px rgba(95,227,208,.45);}
 <div class="screen" id="roomScr" hidden>
   <div class="card">
     <div><div class="eyebrow" id="roomEyebrow">ROOM</div><h2 class="room-title" id="roomTitle"></h2></div>
+    <div class="invite" id="invite" hidden><span class="code" id="inviteCode"></span><span class="link" id="inviteLink"></span><button class="btn2" id="inviteCopy">招待リンクをコピー</button></div>
     <div class="room-meta" id="roomMeta"></div>
     <div class="slotbar" id="slotbar" aria-hidden="true"></div>
     <div class="slot-legend"><span><i class="h"></i>参加者</span><span><i class="n"></i>NPCが入る枠</span></div>
@@ -1643,7 +1662,10 @@ function onRemote(snap){
 }
 (async()=>{
   const use=n=>(window.claude&&window.claude.use)?window.claude.use(n).catch(()=>null):Promise.resolve(null);
-  use('downloads').then(d=>{dl=d;tuneStatus();});
+  use('downloads').then(d=>{
+    // outside Claude a plain browser download works
+    dl=d||((window.claude&&window.claude.use)?null:{save:async({filename,data})=>{const u=URL.createObjectURL(new Blob([data]));const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000);return{status:'saved'};}});
+    tuneStatus();});
   const db=await use('db');
   if(db){try{db.collection('tables').onSnapshot(onRemote,()=>{dbRef=null;tuneStatus();});dbRef=db;}catch(_){dbRef=null;}}
   dbChecked=true;tuneStatus();
@@ -1810,6 +1832,11 @@ function openOnline(){
   showScreen('#online');fillRoomForm();
   if(!$('#cs').value){let v='';try{v=localStorage.getItem('ancient.callsign')||'';}catch(_){}$('#cs').value=v||('PILOT-'+String(Math.floor(Math.random()*900)+100));}
   const ok=!!NET.lobby;$('#rmCreate').disabled=!ok;
+  $('#codePanel').hidden=!NET.external;$('#listPanel').hidden=!!NET.external;
+  $('#onIntro').textContent=NET.external
+    ?'サインインなしで遊べます。部屋を立てると6文字の部屋コードと招待リンクが出るので、一緒に遊ぶ人に送ってください。空いた枠はNPCが埋めます。'
+    :'部屋を立てるか、開いている部屋に参加します。空いた枠はNPCが埋めるので、少人数でも試合が始まります。';
+  if(NET.external&&!$('#joinCode').value){const h=(location.hash||'').slice(1).toLowerCase();if(/^[a-z0-9]{6}$/.test(h))$('#joinCode').value=h;}
   if(NET.unavailable)onMsg({
     outside:'このページはClaudeの外で開かれているため、オンライン対戦を使えません。claude.ai でこのゲームのリンクを開いてください。',
     noroom:'この開き方ではオンライン対戦につながりません。claude.ai にサインインした状態で、会話の中や共有されたリンクからゲームを開いてください。ゲームだけを新しいタブで直接開いた画面や、公開リンクで開いた画面からは参加できません。',
@@ -1826,7 +1853,7 @@ async function hostCreate(){
   const name=cleanText($('#rmName').value,16)||(callsign()+'の部屋');
   const code=Array.from({length:6},()=>'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random()*32)]).join('');
   $('#rmCreate').disabled=true;onMsg('部屋を用意しています…');
-  let nr;try{nr=await NET.lobby.join('anc-'+code);}catch(e){$('#rmCreate').disabled=false;onMsg(e&&e.code==='limit_reached'?'いまは部屋を増やせません。少し待ってからもう一度試してください。':'部屋を作れませんでした。少し待ってからもう一度試してください。',true);return;}
+  let nr;try{nr=await NET.lobby.join('anc-'+code,{as:'host'});}catch(e){$('#rmCreate').disabled=false;onMsg(e&&e.code==='limit_reached'&&!NET.external?'いまは部屋を増やせません。少し待ってからもう一度試してください。':NET.external?'部屋を作れませんでした。通信サーバーにつながらないか、混み合っています。少し待ってからもう一度試してください。':'部屋を作れませんでした。少し待ってからもう一度試してください。',true);return;}
   NET.nr=nr;NET.role='host';NET.code=code;NET.info={name,max,auto,mc:C.match.mechCount};NET.hostPeer=NET.myPeer;
   nr.presence({name:callsign(),g:{v:1,role:'host',st:'lobby',...NET.info}}).catch(()=>{});
   watchRoom();advertise();showRoom();$('#rmCreate').disabled=false;
@@ -1837,8 +1864,8 @@ function advertise(){
 }
 async function joinRoom(r){
   if(!NET.lobby||NET.nr)return;saveCallsign();onMsg('部屋に入っています…');
-  let nr;try{nr=await NET.lobby.join('anc-'+r.code);}catch(e){onMsg('部屋に入れませんでした。部屋が閉じられたか、通信が不安定です。',true);return;}
-  NET.nr=nr;NET.role='client';NET.code=r.code;NET.hostPeer=r.peer;NET.info={name:r.name,max:r.max,auto:0,mc:r.mc};NET.sawHost=false;NET.joinedAt=performance.now();
+  let nr;try{nr=await NET.lobby.join('anc-'+r.code,{as:'guest'});}catch(e){onMsg(e&&e.code==='not_found'?'その部屋が見つかりません。コードが正しいか、ホストが部屋を開いたままか確かめてください。':'部屋に入れませんでした。部屋が閉じられたか、通信が不安定です。',true);return;}
+  NET.nr=nr;NET.role='client';NET.code=r.code;NET.hostPeer=r.peer||nr.hostLabel;NET.info={name:r.name,max:r.max,auto:0,mc:r.mc};NET.sawHost=false;NET.joinedAt=performance.now();
   nr.presence({name:callsign(),c:{v:1,st:'lobby'}}).catch(()=>{});
   watchRoom();showRoom();
 }
@@ -1918,7 +1945,18 @@ function renderRoom(){
     em.textContent=[p.host?'ホスト':'',p.me?'あなた':'',i>=max?'定員外':''].filter(Boolean).join('・');li.append(sp,em);ul.appendChild(li);});
   const sb=$('#roomStart');sb.hidden=NET.role!=='host';sb.textContent=`今のメンバーで開始（NPC ${mc-hum}機）`;
 }
-function showRoom(){showScreen('#roomScr');roomMsg('');$('#roomCd').textContent='';renderRoom();}
+function showRoom(){showScreen('#roomScr');roomMsg('');$('#roomCd').textContent='';renderRoom();
+  const inv=$('#invite');inv.hidden=!NET.external;
+  if(NET.external){$('#inviteCode').textContent=NET.code;$('#inviteLink').textContent=inviteUrl();}}
+function inviteUrl(){return location.origin+location.pathname+'#'+NET.code;}
+$('#inviteCopy').addEventListener('click',()=>{const u=inviteUrl(),b=$('#inviteCopy');
+  const done=()=>{b.textContent='コピーしました';setTimeout(()=>b.textContent='招待リンクをコピー',1600);};
+  try{navigator.clipboard.writeText(u).then(done,()=>{selectText($('#inviteLink'));});}catch(_){selectText($('#inviteLink'));}});
+function selectText(el){const r=document.createRange();r.selectNodeContents(el);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);}
+$('#joinBtn').addEventListener('click',()=>{const code=String($('#joinCode').value||'').trim().toLowerCase().replace(/^.*#/,'');
+  if(!/^[a-z0-9]{6}$/.test(code)){onMsg('部屋コードは6文字の英数字です。',true);return;}
+  joinRoom({code,peer:null,name:'部屋 '+code,max:20,mc:C.match.mechCount});});
+$('#joinCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('#joinBtn').click();});
 function restoreTables(){if(matchTables){matchTables=false;applyTables(baseTables||normalize(loadCache()));}}
 function endMatchView(msg){
   NET.inMatch=false;state='menu';mouseDown=false;
@@ -1943,15 +1981,93 @@ async function leaveRoom(msg){
 }
 function roomLost(msg){if(NET.nr)leaveRoom(msg);}
 $('#onlineBtn').addEventListener('click',openOnline);
+addEventListener('pagehide',()=>{if(NET.nr&&NET.external){try{NET.nr.leave();}catch(_){}}});
 $('#onBack').addEventListener('click',()=>showScreen('#menu'));
 $('#rmCreate').addEventListener('click',hostCreate);
 $('#roomStart').addEventListener('click',hostStart);
 $('#roomLeave').addEventListener('click',()=>leaveRoom(''));
 $('#cs').addEventListener('change',()=>{$('#cs').value=callsign();saveCallsign();if(NET.nr)NET.nr.presence({name:callsign()}).catch(()=>{});advertise();});
+/* ---------- rooms outside Claude: PeerJS, the host's browser is the hub ----------
+   Same surface as the room capability's named rooms (presence / peers / onPeers / leave), so the game code is shared.
+   The host claims the PeerJS id "ancient2-anc-<code>"; guests connect to it; the host relays presence between guests. */
+let peerLibP=null;
+function loadPeerJS(){
+  if(window.Peer)return Promise.resolve();
+  if(!peerLibP)peerLibP=new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
+    sc.onload=()=>res();sc.onerror=()=>{peerLibP=null;rej({code:'upstream_error',message:'peerjs load failed'});};document.head.appendChild(sc);});
+  return peerLibP;
+}
+function externalRooms(){
+  const none=()=>()=>{};
+  return {external:true,presence:async()=>{},peers:()=>[],onPeers:h=>{setTimeout(()=>h({peers:[],joined:[],left:[],updated:[]}),0);return none();},
+    emit:async()=>{},on:none,connected:()=>true,onConnection:h=>{setTimeout(()=>h(true),0);return none();},join:(name,opt)=>pjJoin(name,opt)};
+}
+async function pjJoin(name,opt){
+  await loadPeerJS();
+  const asHost=!!(opt&&opt.as==='host'),hostId='ancient2-'+name;
+  const st={me:null,peers:new Map(),hs:[],errHs:[],my:{},pend:{j:new Set(),l:[],u:new Set()},timer:null,closed:false,conns:new Map(),hostConn:null,lastHost:0,hb:null};
+  const peer=await new Promise((res,rej)=>{
+    const pr=asHost?new Peer(hostId):new Peer();
+    const to=setTimeout(()=>{try{pr.destroy();}catch(_){}rej({code:'upstream_error',message:'timeout'});},15000);
+    pr.on('open',()=>{clearTimeout(to);res(pr);});
+    pr.on('error',e=>{clearTimeout(to);try{pr.destroy();}catch(_){}rej({code:e&&e.type==='unavailable-id'?'limit_reached':'upstream_error',message:String(e&&e.type)});});
+  });
+  st.me=peer.id;
+  const view=()=>[...st.peers.values()].map(x=>Object.freeze({peer:x.peer,by:null,isMe:x.peer===st.me,sameTab:x.peer===st.me,kind:'viewer',guest:false,presence:x.presence,updatedAt:x.updatedAt}));
+  const flush=()=>{st.timer=null;const ps=view(),pd=st.pend;st.pend={j:new Set(),l:[],u:new Set()};
+    const ev={peers:ps,joined:ps.filter(x=>pd.j.has(x.peer)),left:pd.l,updated:ps.filter(x=>pd.u.has(x.peer)&&!pd.j.has(x.peer))};
+    for(const h of st.hs.slice()){try{h(ev);}catch(err){console.error(err);}}};
+  const sched=()=>{if(!st.timer)st.timer=setTimeout(flush,0);};
+  const setP=(id,pres)=>{const ex=st.peers.get(id);if(!ex){st.peers.set(id,{peer:id,presence:pres,updatedAt:Date.now()});st.pend.j.add(id);}else{ex.presence=pres;ex.updatedAt=Date.now();st.pend.u.add(id);}sched();};
+  const drop=id=>{const ex=st.peers.get(id);if(!ex||id===st.me)return;st.peers.delete(id);st.pend.l.push(Object.freeze({peer:id,by:null,isMe:false,sameTab:false,kind:'viewer',guest:false,presence:ex.presence,updatedAt:ex.updatedAt}));sched();};
+  const objOr=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
+  const fail=code=>{if(st.closed)return;st.closed=true;clearInterval(st.hb);for(const id of [...st.peers.keys()])drop(id);
+    for(const h of st.errHs.slice()){try{h({code,message:code});}catch(_){}}try{peer.destroy();}catch(_){}};
+  const toGuests=(msg,except)=>{for(const [id,o] of st.conns)if(id!==except&&o.conn.open){try{o.conn.send(msg);}catch(_){}}};
+  setP(st.me,{});
+  if(asHost){
+    peer.on('connection',conn=>{
+      conn.on('open',()=>{st.conns.set(conn.peer,{conn,last:Date.now()});conn.send({t:'state',peers:[...st.peers.values()].map(x=>[x.peer,x.presence])});});
+      conn.on('data',d=>{const o=st.conns.get(conn.peer);if(o)o.last=Date.now();if(!d||typeof d!=='object')return;
+        if(d.t==='p'){const pres=objOr(d.p);setP(conn.peer,pres);toGuests({t:'p',id:conn.peer,p:pres},conn.peer);}});
+      const gone=()=>{if(!st.conns.has(conn.peer))return;st.conns.delete(conn.peer);drop(conn.peer);toGuests({t:'left',id:conn.peer});};
+      conn.on('close',gone);conn.on('error',gone);
+    });
+    st.hb=setInterval(()=>{const now=Date.now();
+      for(const [id,o] of [...st.conns]){if(now-o.last>9000){st.conns.delete(id);try{o.conn.close();}catch(_){}drop(id);toGuests({t:'left',id});}else if(o.conn.open){try{o.conn.send({t:'hb'});}catch(_){}}}},2000);
+    peer.on('disconnected',()=>{if(!st.closed){try{peer.reconnect();}catch(_){}}}); // lost the signalling server; open links keep working
+  }else{
+    const conn=peer.connect(hostId,{reliable:true,serialization:'json'});
+    try{await new Promise((res,rej)=>{const to=setTimeout(()=>rej({code:'not_found'}),12000);
+      conn.on('open',()=>{clearTimeout(to);res();});
+      peer.on('error',e=>{clearTimeout(to);rej({code:e&&e.type==='peer-unavailable'?'not_found':'upstream_error'});});});}
+    catch(e){try{peer.destroy();}catch(_){}throw e;}
+    st.hostConn=conn;st.lastHost=Date.now();
+    conn.on('data',d=>{st.lastHost=Date.now();if(!d||typeof d!=='object')return;
+      if(d.t==='state'&&Array.isArray(d.peers)){for(const it of d.peers)if(Array.isArray(it)&&String(it[0])!==st.me)setP(String(it[0]),objOr(it[1]));}
+      else if(d.t==='p'){const id=String(d.id);if(id!==st.me)setP(id,objOr(d.p));}
+      else if(d.t==='left'){drop(String(d.id));}});
+    conn.on('close',()=>fail('upstream_error'));
+    st.hb=setInterval(()=>{if(Date.now()-st.lastHost>12000)fail('upstream_error');else if(conn.open){try{conn.send({t:'hb'});}catch(_){}}},2000);
+  }
+  const send=()=>{if(st.closed)return;
+    if(asHost)toGuests({t:'p',id:st.me,p:st.my});else if(st.hostConn&&st.hostConn.open){try{st.hostConn.send({t:'p',p:st.my});}catch(_){}}};
+  return {name,hostLabel:hostId,
+    presence:async patch=>{if(st.closed)throw {code:'upstream_error',message:'closed'};const n={...st.my};
+      for(const k in patch){if(patch[k]===null)delete n[k];else n[k]=patch[k];}st.my=n;setP(st.me,n);send();},
+    peers:()=>view(),
+    onPeers:(h,onErr)=>{st.hs.push(h);if(onErr)st.errHs.push(onErr);setTimeout(()=>{const ps=view();h({peers:ps,joined:ps,left:[],updated:[]});},0);
+      return ()=>{st.hs=st.hs.filter(x=>x!==h);st.errHs=st.errHs.filter(x=>x!==onErr);};},
+    emit:async()=>{},on:()=>()=>{},connected:()=>!st.closed,onConnection:h=>{setTimeout(()=>h(!st.closed),0);return ()=>{};},
+    leave:async()=>{if(st.closed)return;st.closed=true;clearInterval(st.hb);try{peer.destroy();}catch(_){}}};
+}
 (async()=>{
   const inClaude=!!(window.claude&&window.claude.use);
-  const room=inClaude?await window.claude.use('room').catch(()=>null):null;
-  if(!room){NET.unavailable=true;NET.why=inClaude?'noroom':'outside';if(!$('#online').hidden)openOnline();return;}
+  if(!inClaude){NET.lobby=externalRooms();NET.external=true;if(!$('#online').hidden)openOnline();
+    if(/^#[a-z0-9]{6}$/i.test(location.hash||''))openOnline();
+    return;}
+  const room=await window.claude.use('room').catch(()=>null);
+  if(!room){NET.unavailable=true;NET.why='noroom';if(!$('#online').hidden)openOnline();return;}
   NET.lobby=room;
   room.onPeers(ch=>{for(const p of ch.peers)if(p.sameTab)NET.myPeer=p.peer;if(!$('#online').hidden){$('#rmCreate').disabled=!!NET.nr;if($('#onMsg').textContent==='接続しています…')onMsg('');renderRoomList();}},
     e=>{NET.lobby=null;NET.unavailable=true;NET.why=(e&&e.code)||'error';if(!$('#online').hidden)openOnline();});
@@ -1965,4 +2081,5 @@ requestAnimationFrame(frame);
 })();
 </script>
 
-</body></html>
+</body>
+</html>
